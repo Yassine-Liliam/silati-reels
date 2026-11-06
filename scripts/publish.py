@@ -82,6 +82,12 @@ def wait_for_public_url():
 def main():
     if not TOKEN or not IG_ID:
         fail("IG_ACCESS_TOKEN or IG_USER_ID secret is empty")
+    if TOKEN[:1] in "\"'" or TOKEN.lower().startswith("bearer"):
+        fail("IG_ACCESS_TOKEN contains quotes or a 'Bearer' prefix: paste the raw token only")
+    if TOKEN.startswith("EAA"):
+        fail("IG_ACCESS_TOKEN looks like a Facebook token (EAA...), not an Instagram Login token (IG...)")
+    if not TOKEN.startswith("IG"):
+        fail(f"IG_ACCESS_TOKEN has an unexpected format ({len(TOKEN)} chars, does not start with 'IG')")
     with open(CAPTION_FILE, encoding="utf-8") as f:
         caption = f.read().strip()
     if len(caption) > 2200:
