@@ -1,19 +1,20 @@
-# Publishes the reel committed on the `queue` branch to Instagram.
-# A push to `queue-test` runs the same flow but stops before publishing (dry run).
-# The daily job force-pushes a single orphan commit to `queue` containing
-# reel.mp4, caption.txt, this workflow and scripts/publish.py.
+# Publishes a reel pushed by the daily job on a new branch `reel/YYYY-MM-DD`
+# (a single orphan commit with reel.mp4, caption.txt, this workflow and
+# scripts/publish.py). Branches `test/<anything>` run the same flow but stop
+# before publishing (dry run). After success the branch is deleted, so the
+# daily job never needs a force push and the repo does not grow.
 name: Publish reel
 
 on:
   push:
-    branches: [queue, queue-test]
+    branches: ["reel/**", "test/**"]
 
 concurrency:
   group: publish-reel
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write   # only to delete the pushed branch after success
 
 jobs:
   publish:
@@ -24,13 +25,17 @@ jobs:
 
       - name: Check files
         run: |
-          test -s reel.mp4 || { echo "reel.mp4 missing"; exit 1; }
-          test -s caption.txt || { echo "caption.txt missing"; exit 1; }
+          test -s reel.mp4 || { echo "::error::reel.mp4 missing"; exit 1; }
+          test -s caption.txt || { echo "::error::caption.txt missing"; exit 1; }
 
       - name: Publish to Instagram
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           VIDEO_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/reel.mp4
-          DRY_RUN: ${{ github.ref_name == 'queue-test' }}
+          DRY_RUN: ${{ startsWith(github.ref_name, 'test/') }}
         run: python3 scripts/publish.py
+
+      - name: Delete the branch
+        if: success()
+        run: git push origin --delete "$GITHUB_REF_NAME"
