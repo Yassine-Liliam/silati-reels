@@ -44,6 +44,23 @@ def summary(msg):
             f.write(msg + "\n")
 
 
+def diagnose():
+    """On access errors, show what the token can see (never the token itself)."""
+    def get(path, params):
+        url = f"{HOST}/{path}?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            return {"error": e.read().decode(errors="replace")[:300]}
+    me = get("me", {"fields": "id,name"})
+    perms = get("me/permissions", {})
+    granted = [p["permission"] for p in perms.get("data", []) if p.get("status") == "granted"]
+    pages = get("me/accounts", {"fields": "name,instagram_business_account{id,username}"})
+    print(f"::error::DIAG me={json.dumps(me)} | granted={granted} | perms_raw={json.dumps(perms)[:300] if not granted else ''} | pages={json.dumps(pages)[:700]}", flush=True)
+
+
 def call(method, path, params=None):
     url = f"{HOST}/{path}"
     data = None
@@ -61,6 +78,8 @@ def call(method, path, params=None):
             return json.load(r)
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
+        if e.code in (400, 403) and '"code":100' in body.replace(" ", "") or '"code":10' in body.replace(" ", ""):
+            diagnose()
         fail(f"API error {e.code} on {method} {path.split('?')[0]}: {body[:800]}")
 
 
