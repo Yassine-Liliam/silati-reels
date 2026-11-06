@@ -18,8 +18,8 @@ import urllib.request
 
 API = os.environ.get("IG_API_VERSION", "v26.0")
 HOST = f"https://graph.instagram.com/{API}"
-TOKEN = os.environ["IG_ACCESS_TOKEN"]
-IG_ID = os.environ["IG_USER_ID"]
+TOKEN = os.environ.get("IG_ACCESS_TOKEN", "").strip()
+IG_ID = os.environ.get("IG_USER_ID", "").strip()
 VIDEO_URL = os.environ["VIDEO_URL"]
 DRY_RUN = os.environ.get("DRY_RUN", "").lower() == "true"
 CAPTION_FILE = os.environ.get("CAPTION_FILE", "caption.txt")
@@ -27,6 +27,13 @@ CAPTION_FILE = os.environ.get("CAPTION_FILE", "caption.txt")
 
 def log(msg):
     print(msg, flush=True)
+
+
+def fail(msg):
+    # ::error:: makes the message visible as a check-run annotation.
+    print(f"::error::{msg}", flush=True)
+    summary(f"**Échec** : {msg}")
+    sys.exit(1)
 
 
 def summary(msg):
@@ -53,8 +60,7 @@ def call(method, path, params=None):
             return json.load(r)
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
-        summary(f"**Erreur API {e.code}** sur `{method} {path}` : `{body}`")
-        sys.exit(f"API error {e.code} on {method} {path}: {body}")
+        fail(f"API error {e.code} on {method} {path.split('?')[0]}: {body[:800]}")
 
 
 def wait_for_public_url():
@@ -70,14 +76,16 @@ def wait_for_public_url():
         except urllib.error.URLError as e:
             log(f"Video not reachable yet ({e}), retrying...")
         time.sleep(10)
-    sys.exit(f"Video URL never became reachable: {VIDEO_URL}")
+    fail(f"Video URL never became reachable: {VIDEO_URL}")
 
 
 def main():
+    if not TOKEN or not IG_ID:
+        fail("IG_ACCESS_TOKEN or IG_USER_ID secret is empty")
     with open(CAPTION_FILE, encoding="utf-8") as f:
         caption = f.read().strip()
     if len(caption) > 2200:
-        sys.exit("Caption longer than 2200 characters")
+        fail("Caption longer than 2200 characters")
 
     wait_for_public_url()
 
@@ -99,10 +107,9 @@ def main():
         if status == "FINISHED":
             break
         if status in ("ERROR", "EXPIRED"):
-            summary(f"**Traitement Meta en échec** : `{info}`")
-            sys.exit(f"Container failed: {info}")
+            fail(f"Container failed: {info}")
     else:
-        sys.exit(f"Container not ready after 10 minutes (last status {status})")
+        fail(f"Container not ready after 10 minutes (last status {status})")
 
     if DRY_RUN:
         log("DRY RUN: container ready, NOT published.")
