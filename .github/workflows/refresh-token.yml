@@ -1,4 +1,5 @@
-# Instagram long-lived tokens last 60 days. This refreshes it twice a month
+# Instagram Login tokens (IG...) last 60 days. Facebook system user tokens
+# (EAA..., expiry "Never") are skipped. This refreshes it twice a month
 # and stores the new one in the IG_ACCESS_TOKEN secret (needs GH_PAT with
 # "Secrets: Read and write" on this repository).
 name: Refresh Instagram token
@@ -22,6 +23,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
+          case "$IG_ACCESS_TOKEN" in
+            EAA*) echo "Facebook (system user) token: nothing to refresh." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0;;
+          esac
           resp=$(curl -sS --fail-with-body -G "https://graph.instagram.com/refresh_access_token" \
             --data-urlencode "grant_type=ig_refresh_token" \
             --data-urlencode "access_token=${IG_ACCESS_TOKEN}") || {
