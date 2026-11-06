@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publish reel.mp4 + caption.txt (from this commit) as an Instagram Reel.
 
-Instagram API with Instagram Login (graph.instagram.com). Meta fetches the
+Works with a Facebook Login token (EAA..., graph.facebook.com) or an\nInstagram Login token (IG..., graph.instagram.com). Meta fetches the
 video from VIDEO_URL (public raw.githubusercontent.com URL of this commit).
 
 Env: IG_ACCESS_TOKEN, IG_USER_ID, VIDEO_URL, DRY_RUN ("true" = stop before
@@ -17,8 +17,9 @@ import urllib.parse
 import urllib.request
 
 API = os.environ.get("IG_API_VERSION", "v26.0")
-HOST = f"https://graph.instagram.com/{API}"
 TOKEN = os.environ.get("IG_ACCESS_TOKEN", "").strip()
+# EAA... = Facebook Login token (graph.facebook.com); IG... = Instagram Login token.
+HOST = f"https://graph.{'facebook' if TOKEN.startswith('EAA') else 'instagram'}.com/{API}"
 IG_ID = os.environ.get("IG_USER_ID", "").strip()
 VIDEO_URL = os.environ["VIDEO_URL"]
 DRY_RUN = os.environ.get("DRY_RUN", "").lower() == "true"
@@ -84,14 +85,15 @@ def main():
         fail("IG_ACCESS_TOKEN or IG_USER_ID secret is empty")
     if TOKEN[:1] in "\"'" or TOKEN.lower().startswith("bearer"):
         fail("IG_ACCESS_TOKEN contains quotes or a 'Bearer' prefix: paste the raw token only")
-    if TOKEN.startswith("EAA"):
-        fail("IG_ACCESS_TOKEN looks like a Facebook token (EAA...), not an Instagram Login token (IG...)")
-    if not TOKEN.startswith("IG"):
-        fail(f"IG_ACCESS_TOKEN has an unexpected format ({len(TOKEN)} chars, does not start with 'IG')")
+    if not TOKEN.startswith(("IG", "EAA")):
+        fail(f"IG_ACCESS_TOKEN has an unexpected format ({len(TOKEN)} chars, starts with neither 'IG' nor 'EAA')")
     with open(CAPTION_FILE, encoding="utf-8") as f:
         caption = f.read().strip()
     if len(caption) > 2200:
         fail("Caption longer than 2200 characters")
+
+    account = call("GET", IG_ID, {"fields": "username"})
+    log(f"Publishing as @{account.get('username')} via {HOST.split('/')[2]}")
 
     wait_for_public_url()
 
